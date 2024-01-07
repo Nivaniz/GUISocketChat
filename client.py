@@ -1,5 +1,5 @@
 #Client GUI Chat 
-import tkinter as tk, socket, threading
+import tkinter as tk, socket, threading, json
 from tkinter import DISABLED, VERTICAL, END, NORMAL, StringVar
 
 #Definir ventana
@@ -27,30 +27,113 @@ purple = "#e6e6fa"  # Lila pastel
 ENCODER = 'utf-8'
 BYTESIZE = 1024
 
-def connect():
-  pass
+class Connection():
+    ''' Una clase para guardar la información'''
+    def __init__(self):
+        self.encoder = "utf-8"
+        self.bytesize = 1024
 
+def connect(connection):
+    #Borrar cualquier chats previos
+    my_listbox.delete(0, END)
 
-def verify_connection():
-    '''Verificar que la conexión del servidor sea válida y pase la información requerida'''
+    #Recuperar la información para la conexión de los campos
+    connection.name = name_entry.get()
+    connection.target_ip = ip_entry.get()
+    connection.port = port_entry.get()
+    connection.color = color.get()
+
+    try:
+        #Crear un socket client
+        connection.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        connection.client_socket.connect((connection.target_ip, int(connection.port)))
+
+        #Recibir paquetes de mensaje al servidor
+        message_json = connection.client_socket.recv(connection.bytesize)
+        process_message(connection, message_json)
+    except:
+        my_listbox.insert(0, "Error. Conexión no establecida.")
+
+def disconnect(connection):
+    ''' Desconectar el cliente del servidor'''
     pass
 
+def gui_start():
+    ''' Oficialmente comenzar una conexión actualizando el GUI'''
+    connect_button.config(state=DISABLED)
+    disconnect_button.config(state=NORMAL)
+    send_button.config(state=NORMAL)
+    name_entry.config(state=DISABLED)
+    ip_entry.config(state=DISABLED)
+    port_entry.config(state=DISABLED)
 
-def disconnect():
-    '''Desconectar del servidor'''
+    for button in color_buttons:
+        button.config(state=DISABLED)
 
+def gui_end():
+    ''' Oficialmente terminar una conexión actualizando el GUI'''
     pass
 
+def create_message(flag, name, message, color):
+    ''' Regresar un mensaje '''
+    message_packet = {
+        "flag": flag,
+        "name": name,
+        "message": message,
+        "color": color,
+    }
+    return message_packet
 
-def send_message():
-    '''Enviar un mensaje al servidor para ser transmitido.'''
+def process_message(connection, message_json):
+    ''' Regresar un mensaje '''
+    #Actualizar el cliente 
+    message_packet = json.loads(message_json)
+    flag = message_packet["flag"]
+    name = message_packet["name"]
+    message = message_packet["message"]
+    color = message_packet["color"]
+
+    if flag == "INFO":
+        #El servidor pide información para verificar la conexión. Enviar la info
+        message_packet = create_message("INFO", connection.name, "Se une al servidor!", connection.color)
+        message_json = json.dumps(message_packet)
+        connection.client_socket.send(message_json.encode(connection.encoder))
+
+        #Activar GUI para el chat
+        gui_start()
+
+        #Crear un hilo para continuamente recibir información
+        recieve_thread = threading.Thread(target=recieve_message, args=(connection,))
+        recieve_thread.start()
+    
+    elif flag == "MESSAGE":
+        #El servidor envia un mensaje y se muestra
+        my_listbox.insert(0, f"{name}: {message}")
+        my_listbox.itemconfig(0, fg=color)
+
+
+    elif flag == "DISCONNECT":
+        #El servidor pide salir
+        my_listbox.insert(0, f"{name}: {message}")
+        my_listbox.itemconfig(0, fg=color)
+        disconnect(connection)
+
+    else:
+        my_listbox.insert(0, "Error procesando el mensaje...")
+
+def send_message(connection):
+    ''' Enviar un mensaje al servidor '''
     pass
 
-
-def recieve_message():
-    '''Recibir un mensaje entrante del servidor'''
-    pass
-
+def recieve_message(connection):
+    ''' Recibir un mensaje del servidor '''
+    while True:
+        try:
+            message_json = connection.client_socket.recv(connection.bytesize)
+            process_message(connection, message_json)
+        except:
+            my_listbox.insert(0, "La conexión se ha cerrado....")
+            break
 
 # GUI Layout
 info_frame = tk.Frame(root, bg=bg_color)
@@ -70,7 +153,7 @@ ip_label = tk.Label(info_frame, text="IP:", font=my_font, fg=text_color, bg=bg_c
 ip_entry = tk.Entry(info_frame, borderwidth=3, font=my_font)
 port_label = tk.Label(info_frame, text="Puerto:", font=my_font, fg=text_color, bg=bg_color)
 port_entry = tk.Entry(info_frame, borderwidth=3, font=my_font, width=10)
-connect_button = tk.Button(info_frame, text="Conectar", font=my_font, bg=button_color, borderwidth=5, width=10, command=connect)
+connect_button = tk.Button(info_frame, text="Conectar", font=my_font, bg=button_color, borderwidth=5, width=10, command=lambda:connect(my_connection))
 disconnect_button = tk.Button(info_frame, text="Desconectar", font=my_font, bg=button_color, borderwidth=5, width=10, state=DISABLED, command=disconnect)
 
 name_label.grid(row=0, column=0, padx=2, pady=10)
@@ -92,7 +175,7 @@ yellow_button = tk.Radiobutton(color_frame, width=5, text="Amarillo", variable=c
 green_button = tk.Radiobutton(color_frame, width=5, text="Verde", variable=color, value=green, bg=bg_color, fg=text_color, font=my_font)
 blue_button = tk.Radiobutton(color_frame, width=5, text="Azul", variable=color, value=blue, bg=bg_color, fg=text_color, font=my_font)
 purple_button = tk.Radiobutton(color_frame, width=5, text="Morado", variable=color, value=purple, bg=bg_color, fg=text_color, font=my_font)
-colors_buttons =[white_button, red_button, orange_button, yellow_button, green_button, blue_button, purple_button]
+color_buttons =[white_button, red_button, orange_button, yellow_button, green_button, blue_button, purple_button]
 
 white_button.grid(row=1, column=0, padx=2, pady=2)
 red_button.grid(row=1, column=1, padx=2, pady=2)
@@ -125,4 +208,5 @@ output_frame.config(bg=bg_color)
 input_frame.config(bg=bg_color)
 
 # Iniciar ventana
+my_connection = Connection()
 root.mainloop()
