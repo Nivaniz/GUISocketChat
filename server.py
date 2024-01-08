@@ -11,18 +11,16 @@ root.resizable(0,0)
 
 # Definir fuentes y colores
 my_font = ('Poppins', 13)
-bg_color = "#F3EEEE"  # Beige 
-button_color = "#BBCAD6"  # Azul claro
-text_color = "#000000"  # Negro
-white = "#ffffff"
-light_green = "#1fc742"
+black = "#F3EEEE" # Beige
+light_green = "#BBCAD6" # Azul claro
+light_greenn = "#000000" # Negro
+root.config(bg='#F3EEEE') # Beige base
 
-# Crear una clase de conexión para mantener el socket de servidor
+
 class Connection():
-    ''' Se guarda la conexión'''
+    '''Clase para almacenar una conexión'''
     def __init__(self):
         self.host_ip = socket.gethostbyname(socket.gethostname())
-        # 192.168.77.1
         self.encoder = 'utf-8'
         self.bytesize = 1024
 
@@ -30,20 +28,20 @@ class Connection():
         self.client_ips = []
         self.banned_ips = []
 
-# Definir funciones
+
 def start_server(connection):
-    ''' Comenzar el servidor en un puerto dado'''
-    #Conseguir el numero de puerto para comenzar el servidor y unirlo al objeto de la conexión
+    '''Iniciar el servidor en un número de puerto dado'''
+    #Obtener el número de puerto para ejecutar el servidor y adjuntar al objeto de conexión
     connection.port = int(port_entry.get())
 
-    #Crear un socket de servidor
+    #Crear socket del servidor
     connection.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     connection.server_socket.bind((connection.host_ip, connection.port))
     connection.server_socket.listen()
 
-    #Actualizar el estado de los botones
+    #Actualizar GUI
     history_listbox.delete(0, END)
-    history_listbox.insert(0, f"Servidor iniciado en el puerto: {connection.port}.")
+    history_listbox.insert(0, f"Servidor iniciado en puerto: {connection.port}.")
     end_button.config(state=NORMAL)
     self_broadcast_button.config(state=NORMAL)
     message_button.config(state=NORMAL)
@@ -57,36 +55,53 @@ def start_server(connection):
 
 
 def end_server(connection):
-    ''' Terminar el proceso de terminar el seridor '''
-    pass
+    '''Iniciar el proceso de cierre del servidor'''
+    # Alertar a todos los usuarios que el servidor se está cerrando
+    message_packet = create_message("DISCONNECT", "Admin (broadcast)", "El servidor se está cerrando...", light_greenn)
+    message_json = json.dumps(message_packet)
+    broadcast_message(connection, message_json.encode(connection.encoder))
+
+    # Actualizar GUI
+    history_listbox.insert(0, f"Servidor cerrándose en puerto {connection.port}.")
+    end_button.config(state=DISABLED)
+    self_broadcast_button.config(state=DISABLED)
+    message_button.config(state=DISABLED)
+    kick_button.config(state=DISABLED)
+    ban_button.config(state=DISABLED)
+    start_button.config(state=NORMAL)
+
+    # Cerrar socket del servidor
+    connection.server_socket.close()
+
 
 def connect_client(connection):
-    ''' Conectar un cliente al servidor '''
+    '''Conectar un cliente entrante al servidor'''
     while True:
         try:
             client_socket, client_address = connection.server_socket.accept()
-            #Checar si el IP del cliente está baneada
+            # Verificar si la IP del cliente está prohibida.
             if client_address[0] in connection.banned_ips:
-                message_packet = create_message("Desconectado", "Admin (privado)", "Tu has sido baneado... Hasta pronto!", light_green)
+                message_packet = create_message("DISCONNECT", "Admin (private)", "Has sido baneado por violar nuestras normas", light_greenn)
                 message_json = json.dumps(message_packet)
                 client_socket.send(message_json.encode(connection.encoder))
 
-                #Cerrar el socket del cliente
+                # Cerrar el socket del cliente
                 client_socket.close()
             else:
-                #Enviar el paquete del mensaje para recibir información del cliente
-                message_packet = create_message("INFO", "Admin (privado)", "Por favor envia tu nombre", light_green)
+                # Enviar un paquete de mensaje para recibir la información del cliente
+                message_packet = create_message("INFO", "Admin (private)", "Por favor envía tu nombre", light_greenn)
                 message_json = json.dumps(message_packet)
                 client_socket.send(message_json.encode(connection.encoder))
 
-                #Esperar por el mensaje de confirmación de ser enviado para verigicar la conexión
+                # Esperar el mensaje de confirmación que verifica la conexión
                 message_json = client_socket.recv(connection.bytesize)
                 process_message(connection, message_json, client_socket, client_address)
         except:
             break
 
+
 def create_message(flag, name, message, color):
-    ''' Regresar un mensaje en formato a enviar'''
+    '''Devolver un paquete de mensaje para ser enviado'''
     message_packet = {
         "flag": flag,
         "name": name,
@@ -96,89 +111,138 @@ def create_message(flag, name, message, color):
 
     return message_packet
 
-def process_message(connection, flag, message_message_json, client_socket, client_address=(0,0)):
-    ''' Actualizar la información del servidor basado en mensajes '''
-    message_packet = json.loads(message_json) #decodificar y hacerlo diccionario
+
+def process_message(connection, message_json, client_socket, client_address=(0,0)):
+    '''Actualizar información del servidor basada en una bandera del paquete de mensaje'''
+    message_packet = json.loads(message_json) 
     flag = message_packet["flag"]
     name = message_packet["name"]
     message = message_packet["message"]
     color = message_packet["color"]
 
     if flag == "INFO":
-        #Agregar la info del nuevo cliente a la lista
+        # Agregar la nueva información del cliente a las listas apropiadas
         connection.client_sockets.append(client_socket)
         connection.client_ips.append(client_address[0])
 
-        #Enviar al nuevo cliente la actualización
-        message_packet = create_message("MESSAGE", "Admin", f"{name} se ha unido al servidor!!!", light_green)
+        # Difundir el nuevo cliente que se une y actualizar la GUI
+        message_packet = create_message("MESSAGE", "Admin (broadcast)", f"{name} se ha unido a Circle Talk!!!", light_greenn)
         message_json = json.dumps(message_packet)
         broadcast_message(connection, message_json.encode(connection.encoder))
 
-        #Actualizar interfaz del servidor
+        # Actualizar interfaz de usuario del servidor
         client_listbox.insert(END, f"Nombre: {name}        IP Addr: {client_address[0]}")
 
-        #Una vez establecido el cliente, comenzar un hilo para recibir mensajes
+         # Ahora que se ha establecido un cliente, iniciar un hilo para recibir mensajes
         recieve_thread = threading.Thread(target=recieve_message, args=(connection, client_socket,))
         recieve_thread.start()
     
     elif flag == "MESSAGE":
-        #Enviar el mensaje dado
+        # Difundir el mensaje dado
         broadcast_message(connection, message_json)
 
-        #Actualizar interfaz del servidor
+        # Actualizar interfaz de usuario del servidor
         history_listbox.insert(0, f"{name}: {message}")
         history_listbox.itemconfig(0, fg=color)
 
     elif flag == "DISCONNECT":
-        #Cerrar y remover el socket del cliente
+        # Cerrar/eliminar socket del cliente
         index = connection.client_sockets.index(client_socket)
         connection.client_sockets.remove(client_socket)
         connection.client_ips.pop(index)
         client_listbox.delete(index)
         client_socket.close()
  
-        # Mensaje a los usuarios que el cliente ha salido
-        message_packet = create_message("MESSAGE", "Admin", f"{name} ha salido del sevidor...", light_green)
+        # Avisar a todos los usuarios que el cliente ha abandonado el chat
+        message_packet = create_message("MESSAGE", "Admin (broadcast)", f"{name} ha salido de Circle Talk...", light_greenn)
         message_json = json.dumps(message_packet)
         broadcast_message(connection, message_json.encode(connection.encoder))
 
-        #Actualizar interfaz del servidor
-        history_listbox.insert(0, f"Admin: {name} ha salido del servidor...")
+        # Actualizar interfaz de usuario del servidor
+        history_listbox.insert(0, f"Admin (broadcast): {name} ha salido de Circle Talk...")
 
     else:
+        # Captura de errores...
         history_listbox.insert(0, "Error procesando el mensaje...")
 
+
 def broadcast_message(connection, message_json):
-    ''' Enviar un mensaje a todos los clientes conectados al servidor / Todos los JSON estan encoded '''
+    '''Enviar un mensaje a todos los sockets de cliente conectados al servidor... TODOS LOS JSON ESTÁN CODIFICADOS'''
     for client_socket in connection.client_sockets:
         client_socket.send(message_json)
 
+
 def recieve_message(connection, client_socket):
-    ''' Recibir mensajes de un cliente '''
-    pass
+    '''Recibir un mensaje entrante de un cliente'''
+    while True:
+        # Obtener un mensaje_json de un cliente
+        try:
+            message_json = client_socket.recv(connection.bytesize)
+            process_message(connection, message_json, client_socket)
+        except:
+            break
+
 
 def self_broadcast(connection):
-    ''' Enviar un mensaje especial del administrador a todos los clientes '''
-    pass
+    '''Transmitir un mensaje especial del administrador a todos los clientes'''
+    # Crear un paquete de mensaje
+    message_packet = create_message("MESSAGE", "Admin (broadcast)", input_entry.get(), light_greenn)
+    message_json = json.dumps(message_packet)
+    broadcast_message(connection, message_json.encode(connection.encoder))
+
+    # Limpiar la entrada de texto
+    input_entry.delete(0, END)
+
 
 def private_message(connection):
-    ''' Enviar un mensaje privado a un cliente '''
-    pass
+    '''Enviar un mensaje privado a un solo cliente'''
+    # Seleccionar el cliente de la lista de clientes y acceder a su socket de cliente
+    index = client_listbox.curselection()[0]
+    client_socket = connection.client_sockets[index]
+
+    # Crear un paquete de mensaje y enviar
+    message_packet = create_message("MESSAGE", "Admin (private)", input_entry.get(), light_greenn)
+    message_json = json.dumps(message_packet)
+    client_socket.send(message_json.encode(connection.encoder))
+
+    # Limpiar la entrada de texto
+    input_entry.delete(0, END)
+
 
 def kick_client(connection):
-    ''' Expulsar a un cliente dado '''
-    pass
+    '''Expulsar a un cliente específico del servidor'''
+    # Seleccionar un cliente de la lista
+    index = client_listbox.curselection()[0]
+    client_socket = connection.client_sockets[index]
+
+    # Crear el paquete de mensaje
+    message_packet = create_message("DISCONNECT", "Admin (private)", "Tu has sido kickeado...", light_green)
+    message_json = json.dumps(message_packet)
+    client_socket.send(message_json.encode(connection.encoder))
+
 
 def ban_client(connection):
-    ''' Banear a un cliente por su '''
-    pass
+    '''Prohibir a un cliente específico según su dirección IP'''
+    # Seleccionar un cliente de la lista
+    index = client_listbox.curselection()[0]
+    client_socket = connection.client_sockets[index]
 
-# Definir Layout GUI
-connection_frame = tkinter.Frame(root, bg=bg_color)
-history_frame = tkinter.Frame(root, bg=bg_color)
-client_frame = tkinter.Frame(root, bg=bg_color)
-message_frame = tkinter.Frame(root, bg=bg_color)
-admin_frame = tkinter.Frame(root, bg=bg_color)
+    # Crear el paquete de mensaje
+    message_packet = create_message("DISCONNECT", "Admin (private)", "Tu has sido baneado...", light_greenn)
+    message_json = json.dumps(message_packet)
+    client_socket.send(message_json.encode(connection.encoder))
+
+    # Prohibir la dirección IP del cliente
+    connection.banned_ips.append(connection.client_ips[index])
+
+
+# Definir la disposición de la GUI
+# Crear marcos
+connection_frame = tkinter.Frame(root, bg=black)
+history_frame = tkinter.Frame(root, bg=black)
+client_frame = tkinter.Frame(root, bg=black)
+message_frame = tkinter.Frame(root, bg=black)
+admin_frame = tkinter.Frame(root, bg=black)
 
 connection_frame.pack(pady=5)
 history_frame.pack()
@@ -186,50 +250,49 @@ client_frame.pack(pady=5)
 message_frame.pack()
 admin_frame.pack()
 
-# Layout de la conexión
-port_label = tkinter.Label(connection_frame, text="Numero de Puerto:", font=my_font, bg=bg_color, fg=text_color)
+#Connexión
+port_label = tkinter.Label(connection_frame, text="Puerto:", font=my_font, bg=black, fg=light_greenn)
 port_entry = tkinter.Entry(connection_frame, width=10, borderwidth=3, font=my_font)
-start_button = tkinter.Button(connection_frame, text="Comenzar Servidor", borderwidth=5, width=15, font=my_font, bg=button_color, command=lambda:start_server(my_connection))
-end_button = tkinter.Button(connection_frame, text="Finalizar Servidor", borderwidth=5, width=15, font=my_font, bg=button_color, state=DISABLED)
+start_button = tkinter.Button(connection_frame, text="Iniciar", borderwidth=5, width=15, font=my_font, bg=light_green, command=lambda:start_server(my_connection))
+end_button = tkinter.Button(connection_frame, text="Cerrar", borderwidth=5, width=15, font=my_font, bg=light_green, state=DISABLED, command=lambda:end_server(my_connection))
 
 port_label.grid(row=0, column=0, padx=2, pady=10)
 port_entry.grid(row=0, column=1, padx=2, pady=10)
 start_button.grid(row=0, column=2, padx=5, pady=10)
 end_button.grid(row=0, column=3, padx=5, pady=10)
 
-#Layout del historial
+#Historial
 history_scrollbar = tkinter.Scrollbar(history_frame, orient=VERTICAL)
-history_listbox = tkinter.Listbox(history_frame, height=10, width=55, borderwidth=3, font=my_font, bg=bg_color, fg=text_color, yscrollcommand=history_scrollbar.set)
+history_listbox = tkinter.Listbox(history_frame, height=10, width=55, borderwidth=3, font=my_font, bg=black, fg=light_greenn, yscrollcommand=history_scrollbar.set)
 history_scrollbar.config(command=history_listbox.yview)
 
 history_listbox.grid(row=0, column=0)
 history_scrollbar.grid(row=0, column=1, sticky="NS")
 
-#Layout del cliente
+#Cliente
 client_scrollbar = tkinter.Scrollbar(client_frame, orient=VERTICAL)
-client_listbox = tkinter.Listbox(client_frame, height=10, width=55, borderwidth=3, font=my_font, bg=bg_color, fg=text_color, yscrollcommand=client_scrollbar.set)
+client_listbox = tkinter.Listbox(client_frame, height=10, width=55, borderwidth=3, font=my_font, bg=black, fg=light_greenn, yscrollcommand=client_scrollbar.set)
 client_scrollbar.config(command=client_listbox.yview)
 
 client_listbox.grid(row=0, column=0)
 client_scrollbar.grid(row=0, column=1, sticky="NS")
 
-#Layout del mensaje
+#Mensaje
 input_entry = tkinter.Entry(message_frame, width=40, borderwidth=3, font=my_font)
-self_broadcast_button = tkinter.Button(message_frame, text="Broadcast", width=13, borderwidth=5, font=my_font, bg=button_color, state=DISABLED)
+self_broadcast_button = tkinter.Button(message_frame, text="Enviar", width=13, borderwidth=5, font=my_font, bg=light_green, state=DISABLED, command=lambda:self_broadcast(my_connection))
 
 input_entry.grid(row=0, column=0, padx=5, pady=5)
 self_broadcast_button.grid(row=0, column=1, padx=5, pady=5)
 
-#Layout del administrador
-message_button = tkinter.Button(admin_frame, text="PM", borderwidth=5, width=15, font=my_font, bg=button_color, state=DISABLED)
-kick_button = tkinter.Button(admin_frame, text="Kick", borderwidth=5, width=15, font=my_font, bg=button_color, state=DISABLED)
-ban_button = tkinter.Button(admin_frame, text="Ban", borderwidth=5, width=15, font=my_font, bg=button_color, state=DISABLED)
+#Admin 
+message_button = tkinter.Button(admin_frame, text="Privado", borderwidth=5, width=15, font=my_font, bg=light_green, state=DISABLED, command=lambda:private_message(my_connection))
+kick_button = tkinter.Button(admin_frame, text="Kickear", borderwidth=5, width=15, font=my_font, bg=light_green, state=DISABLED, command=lambda:kick_client(my_connection))
+ban_button = tkinter.Button(admin_frame, text="Banear", borderwidth=5, width=15, font=my_font, bg=light_green, state=DISABLED, command=lambda:ban_client(my_connection))
 
 message_button.grid(row=0, column=0, padx=5, pady=5)
 kick_button.grid(row=0, column=1, padx=5, pady=5)
 ban_button.grid(row=0, column=2, padx=5, pady=5)
 
-# Crear una connexión y correr la ventana principal
+# Crear un objeto de conexión y ejecutar el bucle principal de la ventana root
 my_connection = Connection()
-# Iniciar ventana
-root.mainloop() 
+root.mainloop()
