@@ -10,19 +10,26 @@ Circle Talk es una aplicación de chat simple que permite a los usuarios conecta
 
 ## Ventana
 
-Ventana principal (Izquierda ventana de administrador derecha ventana de clientes):
+Ventana principal (Derecha ventana de administrador y Izquierda ventana de clientes):
 <p align="center">
-  <img src="https://github.com/Nivaniz/QuillQuick/blob/main/img/Landing.png" alt="Main Window" width="200">
+  <img src="https://github.com/Nivaniz/GUISocketChat/blob/main/img/main.png" alt="Main Window" width="800">
 </p>
 
 ### Instalación y Ejecución
-1.- Asegúrate de tener Python instalado en tu sistema. 
+1.- Asegúrate de tener Python instalado en tu sistema.
+
 2.- Descarga o clona el repositorio de Circle Talk.
+
 3.- Navega al directorio del proyecto.
+
 4.- Ejecuta el servidor.
+
 5.- Ingresa un número de puerto cuando se te solicite.
+
 6.- Ejecuta la aplicación del cliente.
+
 7.- Completa la información solicitada (Nombre de usuario, IP del servidor, puerto, color de texto).
+
 ¡Únete al chat y comienza a chatear!
 
 ### Notas Adicionales
